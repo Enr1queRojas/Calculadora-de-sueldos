@@ -16,6 +16,7 @@ if 'custom_settings' not in st.session_state:
         "min_wage": GlobalSettings.MINIMUM_WAGE,
         "isn_rate": GlobalSettings.ISN_RATE,
         "isr_table": GlobalSettings.ISR_MONTHLY_TABLE,
+        "imss_rates": GlobalSettings.IMSS_RATES,
     }
 
 # Sync explicit settings so that any decoupled code looking at GlobalSettings gets updated dynamically 
@@ -23,6 +24,7 @@ GlobalSettings.UMA = st.session_state.custom_settings["uma"]
 GlobalSettings.MINIMUM_WAGE = st.session_state.custom_settings["min_wage"]
 GlobalSettings.ISN_RATE = st.session_state.custom_settings["isn_rate"]
 GlobalSettings.ISR_MONTHLY_TABLE = st.session_state.custom_settings["isr_table"]
+GlobalSettings.IMSS_RATES = st.session_state.custom_settings["imss_rates"]
 
 # --- SIDEBAR: Navigation ---
 st.sidebar.title("Navegación")
@@ -130,7 +132,18 @@ elif page == "⚙️ Configuración de Ley":
         st.session_state.custom_settings["isr_table"] = edited_isr.to_dict('records')
 
     with tab_imss:
-        st.subheader("Tasas de Cotización IMSS")
-        st.markdown("🚧 _(Próximamente editor unificado de cuotas Obreras/Patronales)_")
-        st.json(GlobalSettings.IMSS_RATES)
+        st.subheader("Tasas de Cotización IMSS (%)")
+        st.markdown("Edita los porcentajes de retención para el Patrón (ER) y el Empleado (EE). *Ej. 0.05 equivale a 5%*")
+        
+        # Convert dictionary to a DataFrame for easier editing in Streamlit
+        # Format: Branch Name | Rate
+        imss_list = [{"Rama (Branch)": k, "Tasa (Rate)": v} for k, v in st.session_state.custom_settings["imss_rates"].items()]
+        df_imss = pd.DataFrame(imss_list)
+        
+        # Render editable dataframe vertically
+        edited_imss_df = st.data_editor(df_imss, use_container_width=True, hide_index=True)
+        
+        # Convert back to dictionary
+        updated_imss_dict = {row["Rama (Branch)"]: float(row["Tasa (Rate)"]) for _, row in edited_imss_df.iterrows()}
+        st.session_state.custom_settings["imss_rates"] = updated_imss_dict
 
