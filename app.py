@@ -36,10 +36,12 @@ if page == "🧮 Calculadora":
 
     with tab1:
         st.header("Cálculo de Nómina (Esquema Mixto)")
+        modo_entrada = st.radio("Modo de Cálculo", ["Sueldo Diario", "Neto Objetivo"], horizontal=True)
+        st.write("") # Espaciador
+        
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            modo_entrada = st.radio("Modo de Cálculo", ["Sueldo Diario", "Neto Objetivo"], horizontal=True)
             if modo_entrada == "Sueldo Diario":
                 salario_diario = st.number_input("Salario Diario ($)", value=500.0, step=50.0)
             else:
