@@ -1,0 +1,28 @@
+# Entornos Virtuales
+venv/
+.venv/
+env/
+
+# Entornos de desarrollo y cache (Python)
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Cache de Jupyter
+.ipynb_checkpoints
+
+# Configuración y caché de herramientas
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Entornos locales de Streamlit o configuración privada
+.streamlit/secrets.toml
+.env
+
+# Archivos de SO
+.DS_Store
+Thumbs.db
