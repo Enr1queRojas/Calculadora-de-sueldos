@@ -39,7 +39,11 @@ if page == "🧮 Calculadora":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            salario_diario = st.number_input("Salario Diario ($)", value=500.0, step=50.0)
+            modo_entrada = st.radio("Modo de Cálculo", ["Sueldo Diario", "Neto Objetivo"], horizontal=True)
+            if modo_entrada == "Sueldo Diario":
+                salario_diario = st.number_input("Salario Diario ($)", value=500.0, step=50.0)
+            else:
+                neto_objetivo = st.number_input("Neto Mensual Objetivo ($)", value=20000.0, step=1000.0)
         with col2:
             dias_periodo = st.number_input("Días del Periodo", value=30, step=1)
         with col3:
@@ -48,6 +52,10 @@ if page == "🧮 Calculadora":
             asimilados = st.number_input("Monto Asimilados ($)", value=0.0, step=500.0)
         
         st.markdown("---")
+        
+        if modo_entrada == "Neto Objetivo":
+            salario_diario = PayrollEngine.calculate_daily_from_net(neto_objetivo, antiguedad, asimilados, dias_periodo)
+            st.info(f"Salario Diario calculado para el Neto Objetivo: **${salario_diario:,.2f}**")
         
         resultados = PayrollEngine.calculate_net_pay(salario_diario, antiguedad, asimilados, dias_periodo)
         
