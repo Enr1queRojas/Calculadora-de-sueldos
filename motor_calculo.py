@@ -167,6 +167,36 @@ class PayrollEngine:
         return min(sdi, sdi_limit)
 
     @staticmethod
+    def calculate_daily_from_net(target_net: float, years_of_seniority: int, asimilados_amount: float = 0.0, days_period: int = 30, tolerance: float = 0.01) -> float:
+        """
+        Performs a reverse calculation (gross-up) to find the required daily salary
+        to achieve a specific net deposit amount.
+        """
+        # If asimilados already covers the target, daily salary is 0
+        if asimilados_amount >= target_net:
+            return 0.0
+
+        low = 0.0
+        # High bound: Assuming roughly 40% tax/deduction, target_net * 2 is a safe start
+        high = max(target_net * 2, GlobalSettings.MINIMUM_WAGE * 2) 
+        
+        # Binary search for the daily salary
+        for _ in range(100):
+            mid = (low + high) / 2
+            res = PayrollEngine.calculate_net_pay(mid, years_of_seniority, asimilados_amount, days_period)
+            current_net = res["net_total_deposit"]
+            
+            if abs(current_net - target_net) < tolerance:
+                return mid
+            
+            if current_net < target_net:
+                low = mid
+            else:
+                high = mid
+        
+        return (low + high) / 2
+
+    @staticmethod
     def calculate_net_pay(daily_salary: float, years_of_seniority: int, asimilados_amount: float = 0.0, days_period: int = 30) -> dict:
         """
         Calculates payroll including an additional Asimilados component.
