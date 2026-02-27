@@ -108,24 +108,31 @@ class ISRCalculator:
 class FeeCalculator:
     """Handles calculations for Professional Fees under RESICO regime."""
 
-    def __init__(self, gross_amount, settings):
+    def __init__(self, gross_amount):
         self.gross_amount = gross_amount
-        self.settings = settings # GlobalSettings.RESICO_SETTINGS
+        # Access rates from settings to maintain decoupling
+        self.settings = GlobalSettings.RESICO_SETTINGS
 
     def calculate_invoice(self):
         """
         Calculates VAT, Retentions and Net total.
         Formula: Gross + IVA - Ret_IVA - Ret_ISR = Net
         """
+        # Calculate individual tax components
         iva = self.gross_amount * self.settings["IVA_RATE"]
         ret_iva = self.gross_amount * self.settings["RET_IVA_RATE"]
         ret_isr = self.gross_amount * self.settings["RET_ISR_RATE"]
         
-        net_to_deposit = self.gross_amount + iva - ret_iva - ret_isr
+        # Subtotal before retentions
+        subtotal = self.gross_amount + iva
+        
+        # Final amount to be received by the worker
+        net_to_deposit = subtotal - ret_iva - ret_isr
         
         return {
-            "subtotal": round(self.gross_amount, 2),
+            "gross_amount": round(self.gross_amount, 2),
             "iva": round(iva, 2),
+            "subtotal": round(subtotal, 2),
             "ret_iva": round(ret_iva, 2),
             "ret_isr": round(ret_isr, 2),
             "net_total": round(net_to_deposit, 2)
@@ -160,51 +167,56 @@ class PayrollEngine:
         return min(sdi, sdi_limit)
 
     @staticmethod
-    def calculate_net_pay(daily_salary: float, years_of_seniority: int, days_period: int = 30) -> dict:
+    def calculate_net_pay(daily_salary: float, years_of_seniority: int, asimilados_amount: float = 0.0, days_period: int = 30) -> dict:
         """
-        Calculates the complete payroll breakdown (Gross, ISR, IMSS, Net, Employer Cost).
-        Includes Subsidio al Empleo (2024 updated rules) and ISN.
+        Calculates payroll including an additional Asimilados component.
         """
-        # 1. Gross Income
+        # 1. Base Payroll Calculation (Existing logic)
         gross_income = daily_salary * days_period
-        
-        # 2. SDI and IMSS
         sdi = PayrollEngine.calculate_sdi(daily_salary, years_of_seniority)
         imss_calc = IMSSCalculator(sbc=sdi, uma_value=GlobalSettings.UMA, days_period=days_period)
         imss_breakdown = imss_calc.get_full_breakdown()
         
-        # 3. ISR
         isr_calc = ISRCalculator(taxable_income=gross_income, isr_table=GlobalSettings.ISR_MONTHLY_TABLE)
         isr_deduction = isr_calc.calculate()
         
-        # 4. Employment Subsidy (Subsidio al Empleo) - Decreases ISR
+        # 2. Employment Subsidy logic
         subsidy = 0.0
         if hasattr(GlobalSettings, "SUBSIDIO_EMPLEO"):
             if gross_income <= GlobalSettings.SUBSIDIO_EMPLEO["income_limit"]:
                 subsidy = GlobalSettings.SUBSIDIO_EMPLEO["subsidy_amount"]
         
-        # After the May 2024 update, the subsidy just offsets ISR. Any remaining subsidy is effectively lost.
         effective_isr = max(0.0, isr_deduction - subsidy)
-        subsidy_applied = min(subsidy, isr_deduction) # We only "applied" enough to offset ISR.
+        subsidy_applied = min(subsidy, isr_deduction)
         
-        # 5. Net Pay
-        net_pay = gross_income - effective_isr - imss_breakdown["employee_deduction"]
+        # 3. Asimilados Component (The "Combo")
+        # The employee receives the full asimilados_amount
+        # The company pays an additional 8% fee on that amount
+        asimilados_fee_rate = 0.08 
+        asimilados_fee_cost = asimilados_amount * asimilados_fee_rate
         
-        # 6. ISN (Employer Cost)
+        # 4. Final Totals
+        # Net pay = Payroll Net + Full Asimilados Amount
+        payroll_net = gross_income - effective_isr - imss_breakdown["employee_deduction"]
+        total_net_to_deposit = payroll_net + asimilados_amount
+        
+        # Total Employer Cost = Payroll Cost + Asimilados Amount + 8% Fee
         isn_cost = gross_income * getattr(GlobalSettings, "ISN_RATE", 0.03)
-        total_employer_cost = gross_income + imss_breakdown["employer_cost"] + isn_cost
+        payroll_employer_cost = gross_income + imss_breakdown["employer_cost"] + isn_cost
+        total_employer_cost = payroll_employer_cost + asimilados_amount + asimilados_fee_cost
         
         return {
             "gross_income": round(gross_income, 2),
-            "sdi": round(sdi, 2),
+            "net_pay_payroll": round(payroll_net, 2),
+            "asimilados_amount": round(asimilados_amount, 2),
+            "net_total_deposit": round(total_net_to_deposit, 2), # This is the big green number
             "imss_deduction": imss_breakdown["employee_deduction"],
-            "isr_deduction": isr_deduction,
             "subsidy_applied": round(subsidy_applied, 2),
             "effective_isr": round(effective_isr, 2),
-            "net_pay": round(net_pay, 2),
             "employer_imss_cost": imss_breakdown["employer_cost"],
             "isn_cost": round(isn_cost, 2),
-            "total_employer_cost": round(total_employer_cost, 2)
+            "asimilados_fee_cost": round(asimilados_fee_cost, 2),
+            "total_employer_cost": round(total_employer_cost, 2) # This is the big red number
         }
 
 # --- Ejercicios de prueba local ---
@@ -212,30 +224,35 @@ if __name__ == "__main__":
     salario_diario_ejemplo = 500.00
     antiguedad_ejemplo = 2 # 2 años
     
-    print(f"--- Calculadora de Nómina (Neto y Costo Patronal) ---")
-    resultados = PayrollEngine.calculate_net_pay(salario_diario_ejemplo, antiguedad_ejemplo, days_period=30)
+    print(f"--- Calculadora de Nómina (Esquema Mixto) ---")
+    resultados = PayrollEngine.calculate_net_pay(salario_diario_ejemplo, antiguedad_ejemplo, asimilados_amount=5000.0, days_period=30)
     
-    print(f"Ingreso Bruto Mensual: ${resultados['gross_income']:,.2f}")
+    print(f"Ingreso Bruto Mensual (Nómina): ${resultados['gross_income']:,.2f}")
     print(f"(-) Retención IMSS Colaborador: ${resultados['imss_deduction']:,.2f}")
     print(f"(-) Retención ISR Efectiva: ${resultados['effective_isr']:,.2f}")
-    if resultados['subsidy_applied'] > 0:
+    if resultados.get('subsidy_applied', 0) > 0:
         print(f"  * Subsidio al Empleo descontado del ISR: ${resultados['subsidy_applied']:,.2f}")
+    print(f"Neto Nómina: ${resultados['net_pay_payroll']:,.2f}")
+    print(f"(+) Monto Asimilados: ${resultados['asimilados_amount']:,.2f}")
     print(f"=====================================")
-    print(f"NETO A DEPOSITAR (Take-Home Pay): ${resultados['net_pay']:,.2f}\n")
+    print(f"NETO A DEPOSITAR (Take-Home Pay Total): ${resultados['net_total_deposit']:,.2f}\n")
     
     print(f"--- Desglose de Costo Patronal ---")
     print(f"Salario Bruto (Base de nómina): ${resultados['gross_income']:,.2f}")
     print(f"(+) Cuotas Obrero-Patronales IMSS/Infonavit/Retiro: ${resultados['employer_imss_cost']:,.2f}")
-    print(f"(+) Impuesto Sobre Nómina (ISN 3%): ${resultados['isn_cost']:,.2f}")
+    print(f"(+) Impuesto Sobre Nómina (ISN): ${resultados['isn_cost']:,.2f}")
+    print(f"(+) Monto Asimilados depositado: ${resultados['asimilados_amount']:,.2f}")
+    print(f"(+) Comisión Asimilados (8%): ${resultados['asimilados_fee_cost']:,.2f}")
     print(f"=====================================")
-    print(f"COSTO REAL DE LA NÓMINA: ${resultados['total_employer_cost']:,.2f}")
+    print(f"COSTO REAL DE LA NÓMINA (MIXTA): ${resultados['total_employer_cost']:,.2f}")
 
     print(f"\n--- Prueba Honorarios RESICO ---")
     honorarios_brutos = 19215.43
-    calc_honorarios = FeeCalculator(honorarios_brutos, GlobalSettings.RESICO_SETTINGS)
+    calc_honorarios = FeeCalculator(honorarios_brutos)
     res_honorarios = calc_honorarios.calculate_invoice()
-    print(f"Subtotal / Monto Bruto: ${res_honorarios['subtotal']:,.2f}")
+    print(f"Honorario Base (Monto Bruto): ${res_honorarios['gross_amount']:,.2f}")
     print(f"(+) IVA (16%): ${res_honorarios['iva']:,.2f}")
+    print(f"Subtotal: ${res_honorarios['subtotal']:,.2f}")
     print(f"(-) Retención IVA (10.67%): ${res_honorarios['ret_iva']:,.2f}")
     print(f"(-) Retención ISR (1.25%): ${res_honorarios['ret_isr']:,.2f}")
     print(f"=====================================")
