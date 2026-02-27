@@ -4,7 +4,7 @@ from settings import GlobalSettings
 from motor_calculo import PayrollEngine, FeeCalculator
 
 # Page Config
-st.set_page_config(page_title="Antigravity Payroll", page_icon="💸", layout="wide")
+st.set_page_config(page_title="Innoverse Payroll", page_icon="💸", layout="wide")
 
 st.title("💸 Calculadora de Nómina y Honorarios")
 st.markdown("Plataforma paramétrica para el cálculo de sueldos y salarios en México.")
