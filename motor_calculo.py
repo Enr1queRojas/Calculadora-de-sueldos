@@ -105,6 +105,32 @@ class ISRCalculator:
                 break
         return selected_bracket
 
+class FeeCalculator:
+    """Handles calculations for Professional Fees under RESICO regime."""
+
+    def __init__(self, gross_amount, settings):
+        self.gross_amount = gross_amount
+        self.settings = settings # GlobalSettings.RESICO_SETTINGS
+
+    def calculate_invoice(self):
+        """
+        Calculates VAT, Retentions and Net total.
+        Formula: Gross + IVA - Ret_IVA - Ret_ISR = Net
+        """
+        iva = self.gross_amount * self.settings["IVA_RATE"]
+        ret_iva = self.gross_amount * self.settings["RET_IVA_RATE"]
+        ret_isr = self.gross_amount * self.settings["RET_ISR_RATE"]
+        
+        net_to_deposit = self.gross_amount + iva - ret_iva - ret_isr
+        
+        return {
+            "subtotal": round(self.gross_amount, 2),
+            "iva": round(iva, 2),
+            "ret_iva": round(ret_iva, 2),
+            "ret_isr": round(ret_isr, 2),
+            "net_total": round(net_to_deposit, 2)
+        }
+
 class PayrollEngine:
     """
     Core engine for payroll calculations. 
@@ -203,3 +229,14 @@ if __name__ == "__main__":
     print(f"(+) Impuesto Sobre Nómina (ISN 3%): ${resultados['isn_cost']:,.2f}")
     print(f"=====================================")
     print(f"COSTO REAL DE LA NÓMINA: ${resultados['total_employer_cost']:,.2f}")
+
+    print(f"\n--- Prueba Honorarios RESICO ---")
+    honorarios_brutos = 19215.43
+    calc_honorarios = FeeCalculator(honorarios_brutos, GlobalSettings.RESICO_SETTINGS)
+    res_honorarios = calc_honorarios.calculate_invoice()
+    print(f"Subtotal / Monto Bruto: ${res_honorarios['subtotal']:,.2f}")
+    print(f"(+) IVA (16%): ${res_honorarios['iva']:,.2f}")
+    print(f"(-) Retención IVA (10.67%): ${res_honorarios['ret_iva']:,.2f}")
+    print(f"(-) Retención ISR (1.25%): ${res_honorarios['ret_isr']:,.2f}")
+    print(f"=====================================")
+    print(f"NETO A RECIBIR: ${res_honorarios['net_total']:,.2f}")
