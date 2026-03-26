@@ -45,7 +45,7 @@ with tab_isr:
     df_isr = pd.DataFrame(st.session_state.custom_settings["isr_table"])
     
     # Render editable dataframe
-    edited_isr = st.data_editor(df_isr, num_rows="dynamic", use_container_width=True)
+    edited_isr = st.data_editor(df_isr, num_rows="dynamic", width='stretch')
     st.session_state.custom_settings["isr_table"] = edited_isr.to_dict('records')
 
 with tab_imss:
@@ -57,7 +57,7 @@ with tab_imss:
     df_imss = pd.DataFrame(imss_list)
     
     # Render editable dataframe vertically
-    edited_imss_df = st.data_editor(df_imss, use_container_width=True, hide_index=True)
+    edited_imss_df = st.data_editor(df_imss, width='stretch', hide_index=True)
     
     updated_imss_dict = {row["Rama (Branch)"]: float(row["Tasa (Rate)"]) for _, row in edited_imss_df.iterrows()}
     st.session_state.custom_settings["imss_rates"] = updated_imss_dict

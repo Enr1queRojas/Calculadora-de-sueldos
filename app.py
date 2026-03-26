@@ -27,7 +27,7 @@ GlobalSettings.ISR_MONTHLY_TABLE = st.session_state.custom_settings["isr_table"]
 GlobalSettings.IMSS_RATES = st.session_state.custom_settings["imss_rates"]
 
 # --- MAIN DASHBOARD: Tablas de Selección ---
-tab1, tab2 = st.tabs(["Nómina (Esquema Mixto)", "Honorarios (RESICO)"])
+tab1, tab2, tab3 = st.tabs(["Nómina (Esquema Mixto)", "Honorarios (RESICO)", "Plantilla Mensual"])
 
 with tab1:
     st.header("Cálculo de Nómina (Esquema Mixto)")
@@ -107,3 +107,100 @@ with tab2:
         
     with st.expander("Ver JSON Completo"):
         st.json(results)
+
+MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+          "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+
+with tab3:
+    st.header("Plantilla Mensual de Empleados")
+    st.caption("Define el esquema de cada empleado y marca los meses en que estará activo.")
+
+    if 'roster' not in st.session_state:
+        st.session_state.roster = pd.DataFrame({
+            "Empleado": ["Empleado 1"],
+            "Neto Nómina ($)": [10000.0],
+            "Asimilados ($)": [0.0],
+            "Antigüedad (años)": [1],
+            **{m: False for m in MONTHS}
+        })
+
+    roster = st.data_editor(
+        st.session_state.roster,
+        num_rows="dynamic",
+        width='stretch',
+        column_config={
+            "Empleado": st.column_config.TextColumn("Empleado", width="medium"),
+            "Neto Nómina ($)": st.column_config.NumberColumn("Neto Nómina ($)", min_value=0, step=500.0, format="$%.2f"),
+            "Asimilados ($)": st.column_config.NumberColumn("Asimilados ($)", min_value=0, step=500.0, format="$%.2f"),
+            "Antigüedad (años)": st.column_config.NumberColumn("Antigüedad", min_value=1, max_value=5, step=1, width="small"),
+            **{m: st.column_config.CheckboxColumn(m, width="small") for m in MONTHS},
+        },
+        key="roster_editor"
+    )
+
+    # --- Calculate per employee ---
+    calc_rows = []
+    for _, row in roster.iterrows():
+        neto = float(row.get("Neto Nómina ($)") or 0)
+        asim = float(row.get("Asimilados ($)") or 0)
+        antig = max(1, int(row.get("Antigüedad (años)") or 1))
+        nombre = str(row.get("Empleado") or "")
+
+        if neto > 0:
+            sd = PayrollEngine.calculate_daily_from_net(neto, antig, 30)
+            res = PayrollEngine.calculate_net_pay(sd, antig, asim, 30)
+            neto_dep = res["net_total_deposit"]
+            costo = res["total_employer_cost"]
+        else:
+            neto_dep = asim
+            costo = round(asim * 1.08, 2)
+
+        calc_rows.append({
+            "Empleado": nombre,
+            "Neto Nómina ($)": neto,
+            "Asimilados ($)": asim,
+            "NETO A DEPOSITAR": neto_dep,
+            "COSTO TOTAL EMPRESA": costo,
+            **{m: bool(row.get(m, False)) for m in MONTHS}
+        })
+
+    if not calc_rows:
+        st.info("Agrega empleados en la tabla para ver los resultados.")
+    else:
+        result_df = pd.DataFrame(calc_rows)
+
+        st.markdown("---")
+        st.subheader("Resumen por Empleado")
+
+        summary_display = result_df[["Empleado","Neto Nómina ($)","Asimilados ($)","NETO A DEPOSITAR","COSTO TOTAL EMPRESA"]].copy()
+        st.dataframe(
+            summary_display.style.format({
+                "Neto Nómina ($)": "${:,.2f}",
+                "Asimilados ($)": "${:,.2f}",
+                "NETO A DEPOSITAR": "${:,.2f}",
+                "COSTO TOTAL EMPRESA": "${:,.2f}",
+            }),
+            width='stretch',
+            hide_index=True
+        )
+
+        st.markdown("---")
+        st.subheader("Proyección de Costo Mensual")
+
+        # Build display matrix: rows=employees, cols=months (show cost if active, blank if not)
+        matrix_rows = []
+        for _, row in result_df.iterrows():
+            matrix_row = {"Empleado": row["Empleado"]}
+            for m in MONTHS:
+                matrix_row[m] = f"${row['COSTO TOTAL EMPRESA']:,.2f}" if row[m] else ""
+            matrix_rows.append(matrix_row)
+
+        # Totals row
+        totals_row = {"Empleado": "TOTAL"}
+        for m in MONTHS:
+            total = result_df.loc[result_df[m] == True, "COSTO TOTAL EMPRESA"].sum()
+            totals_row[m] = f"${total:,.2f}" if total > 0 else ""
+        matrix_rows.append(totals_row)
+
+        matrix_df = pd.DataFrame(matrix_rows)
+        st.dataframe(matrix_df, width='stretch', hide_index=True)
