@@ -167,33 +167,28 @@ class PayrollEngine:
         return min(sdi, sdi_limit)
 
     @staticmethod
-    def calculate_daily_from_net(target_net: float, years_of_seniority: int, asimilados_amount: float = 0.0, days_period: int = 30, tolerance: float = 0.01) -> float:
+    def calculate_daily_from_net(target_payroll_net: float, years_of_seniority: int, days_period: int = 30, tolerance: float = 0.01) -> float:
         """
         Performs a reverse calculation (gross-up) to find the required daily salary
-        to achieve a specific net deposit amount.
+        to achieve a specific net payroll amount (excluding asimilados).
+        Asimilados is an independent additive component and does not affect this calculation.
         """
-        # If asimilados already covers the target, daily salary is 0
-        if asimilados_amount >= target_net:
-            return 0.0
-
         low = 0.0
-        # High bound: Assuming roughly 40% tax/deduction, target_net * 2 is a safe start
-        high = max(target_net * 2, GlobalSettings.MINIMUM_WAGE * 2) 
-        
-        # Binary search for the daily salary
+        high = max(target_payroll_net * 2, GlobalSettings.MINIMUM_WAGE * 2)
+
         for _ in range(100):
             mid = (low + high) / 2
-            res = PayrollEngine.calculate_net_pay(mid, years_of_seniority, asimilados_amount, days_period)
-            current_net = res["net_total_deposit"]
-            
-            if abs(current_net - target_net) < tolerance:
+            res = PayrollEngine.calculate_net_pay(mid, years_of_seniority, 0.0, days_period)
+            current_net = res["net_pay_payroll"]
+
+            if abs(current_net - target_payroll_net) < tolerance:
                 return mid
-            
-            if current_net < target_net:
+
+            if current_net < target_payroll_net:
                 low = mid
             else:
                 high = mid
-        
+
         return (low + high) / 2
 
     @staticmethod
@@ -203,9 +198,12 @@ class PayrollEngine:
         """
         # 1. Base Payroll Calculation (Existing logic)
         gross_income = daily_salary * days_period
-        sdi = PayrollEngine.calculate_sdi(daily_salary, years_of_seniority)
-        imss_calc = IMSSCalculator(sbc=sdi, uma_value=GlobalSettings.UMA, days_period=days_period)
-        imss_breakdown = imss_calc.get_full_breakdown()
+        if daily_salary == 0.0:
+            imss_breakdown = {"employee_deduction": 0.0, "employer_cost": 0.0}
+        else:
+            sdi = PayrollEngine.calculate_sdi(daily_salary, years_of_seniority)
+            imss_calc = IMSSCalculator(sbc=sdi, uma_value=GlobalSettings.UMA, days_period=days_period)
+            imss_breakdown = imss_calc.get_full_breakdown()
         
         isr_calc = ISRCalculator(taxable_income=gross_income, isr_table=GlobalSettings.ISR_MONTHLY_TABLE)
         isr_deduction = isr_calc.calculate()

@@ -51,8 +51,8 @@ with tab1:
     st.markdown("---")
     
     if modo_entrada == "Neto Objetivo":
-        salario_diario = PayrollEngine.calculate_daily_from_net(neto_objetivo, antiguedad, asimilados, dias_periodo)
-        st.info(f"Salario Diario calculado para el Neto Objetivo: **${salario_diario:,.2f}**")
+        salario_diario = PayrollEngine.calculate_daily_from_net(neto_objetivo, antiguedad, dias_periodo)
+        st.info(f"Salario Diario calculado para Neto de Nómina **${neto_objetivo:,.2f}**: **${salario_diario:,.2f}** | Total a depositar (+ Asimilados): **${neto_objetivo + asimilados:,.2f}**")
     
     resultados = PayrollEngine.calculate_net_pay(salario_diario, antiguedad, asimilados, dias_periodo)
     
